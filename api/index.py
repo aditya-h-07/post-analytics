@@ -1,7 +1,6 @@
 import json
 import math
 from pathlib import Path
-from fastapi.responses import Response
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,25 +8,13 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-@app.options("/")
-@app.options("/analytics")
-def cors_preflight():
-    return Response(
-        status_code=204,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        },
-    )
-
-@app.middleware("http")
-async def ensure_cors_headers(request, call_next):
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
+# Enable CORS for the assignment grader
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "telemetry.json"
 
@@ -39,6 +26,7 @@ class AnalyticsRequest(BaseModel):
 
 def percentile95(values):
     values = sorted(values)
+
     if not values:
         return 0.0
 
@@ -55,8 +43,8 @@ def percentile95(values):
 @app.post("/analytics")
 def analytics(request: AnalyticsRequest):
     try:
-        with open(DATA_FILE, encoding="utf-8") as f:
-            records = json.load(f)
+        with open(DATA_FILE, encoding="utf-8") as file:
+            records = json.load(file)
     except (OSError, json.JSONDecodeError):
         raise HTTPException(
             status_code=500,
@@ -67,23 +55,34 @@ def analytics(request: AnalyticsRequest):
 
     for region in request.regions:
         selected = [
-            r for r in records
-            if r.get("region", "").lower() == region.lower()
+            record
+            for record in records
+            if record.get("region", "").lower() == region.lower()
         ]
 
-        latencies = [float(r["latency_ms"]) for r in selected]
-        uptimes = [float(r["uptime_pct"]) for r in selected]
+        latencies = [
+            float(record["latency_ms"])
+            for record in selected
+        ]
+
+        uptimes = [
+            float(record["uptime_pct"])
+            for record in selected
+        ]
 
         result[region] = {
             "avg_latency": (
-                sum(latencies) / len(latencies) if latencies else 0
+                sum(latencies) / len(latencies)
+                if latencies else 0
             ),
             "p95_latency": percentile95(latencies),
             "avg_uptime": (
-                sum(uptimes) / len(uptimes) if uptimes else 0
+                sum(uptimes) / len(uptimes)
+                if uptimes else 0
             ),
             "breaches": sum(
-                x > request.threshold_ms for x in latencies
+                latency > request.threshold_ms
+                for latency in latencies
             ),
         }
 
