@@ -1,12 +1,25 @@
 import json
 import math
 from pathlib import Path
+from fastapi.responses import Response
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI()
+
+@app.options("/")
+@app.options("/analytics")
+def cors_preflight():
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
 
 @app.middleware("http")
 async def ensure_cors_headers(request, call_next):
