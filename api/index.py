@@ -1,3 +1,4 @@
+
 import json
 import math
 from pathlib import Path
@@ -8,13 +9,24 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# Enable CORS for the assignment grader
+# Standard CORS support for browser preflight requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Always attach CORS headers, even when Origin is absent
+@app.middleware("http")
+async def add_cors_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "telemetry.json"
 
@@ -61,24 +73,19 @@ def analytics(request: AnalyticsRequest):
         ]
 
         latencies = [
-            float(record["latency_ms"])
-            for record in selected
+            float(record["latency_ms"]) for record in selected
         ]
-
         uptimes = [
-            float(record["uptime_pct"])
-            for record in selected
+            float(record["uptime_pct"]) for record in selected
         ]
 
         result[region] = {
             "avg_latency": (
-                sum(latencies) / len(latencies)
-                if latencies else 0
+                sum(latencies) / len(latencies) if latencies else 0
             ),
             "p95_latency": percentile95(latencies),
             "avg_uptime": (
-                sum(uptimes) / len(uptimes)
-                if uptimes else 0
+                sum(uptimes) / len(uptimes) if uptimes else 0
             ),
             "breaches": sum(
                 latency > request.threshold_ms
