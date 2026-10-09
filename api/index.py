@@ -53,6 +53,7 @@ def percentile95(values):
 
 @app.post("/")
 @app.post("/analytics")
+@app.post("/api/latency")
 def analytics(request: AnalyticsRequest):
     try:
         with open(DATA_FILE, encoding="utf-8") as file:
